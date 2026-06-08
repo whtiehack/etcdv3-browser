@@ -22,8 +22,8 @@ var (
 	etcdEndpoints  = env("ETCD", "etcd:2379", "comma-separated list of etcd endpoints")
 	editable       = envInt("EDITABLE", 0, "enable update functionality")
 	pprof          = envInt("PPROF", 0, "enable /debug/pprof endpoint")
-	username       = env("USERNAME", "", "supply username to etcd")
-	password       = env("PASSWORD", "", "supply password to etcd")
+	username       = env("ETCD_USERNAME", "", "supply username to etcd")
+	password       = env("ETCD_PASSWORD", "", "supply password to etcd")
 	prefix         = env("PREFIX", "", "browse KVs under the given prefix")
 )
 
