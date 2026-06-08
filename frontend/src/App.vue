@@ -25,10 +25,11 @@
                   <pre class="mono mb-2">{{ activeItemValue }}</pre>
                 </v-card>
               </div>
-              <v-card-actions v-if="editable" class="details-actions">
-                <v-btn variant="elevated" color="button-bg" @click.stop="btnAdd">Add</v-btn>
-                <v-btn variant="elevated" color="button-bg" v-show="!!activeItemId" @click.stop="btnEdit">Edit</v-btn>
-                <v-btn variant="elevated" color="button-bg" v-show="!!activeItemId" @click.stop="btnDelete">Delete</v-btn>
+              <v-card-actions class="details-actions">
+                <v-btn variant="elevated" color="button-bg" v-show="!!activeItemId" @click.stop="btnHistory">History</v-btn>
+                <v-btn variant="elevated" color="button-bg" v-if="editable" @click.stop="btnAdd">Add</v-btn>
+                <v-btn variant="elevated" color="button-bg" v-if="editable" v-show="!!activeItemId" @click.stop="btnEdit">Edit</v-btn>
+                <v-btn variant="elevated" color="button-bg" v-if="editable" v-show="!!activeItemId" @click.stop="btnDelete">Delete</v-btn>
               </v-card-actions>
             </div>
           </v-col>
@@ -73,6 +74,42 @@
         </v-card>
       </v-form>
     </v-dialog>
+
+    <v-dialog v-model="historyDialogOpen" max-width="800" @keydown.esc="historyDialogOpen = false">
+      <v-card>
+        <v-card-title>History: {{ historyKey }}</v-card-title>
+        <v-card-text>
+          <div v-if="historyLoading" class="text-center pa-4">Loading...</div>
+          <v-table v-else-if="historyEntries.length > 0" density="compact">
+            <thead>
+              <tr>
+                <th style="width:100px">Revision</th>
+                <th style="width:80px">Type</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(entry, idx) in historyEntries" :key="idx"
+                  @click="historySelected = idx"
+                  :style="{ cursor: 'pointer', background: historySelected === idx ? 'rgba(var(--v-theme-primary), 0.12)' : '' }">
+                <td class="mono">{{ entry.revision }}</td>
+                <td>{{ entry.isDelete ? 'DELETE' : 'PUT' }}</td>
+                <td class="mono" style="max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ entry.isDelete ? '-' : entry.value }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+          <div v-else class="text-center pa-4 text-grey">No history (may have been compacted)</div>
+          <v-card v-if="historySelected !== null && historyEntries[historySelected] && !historyEntries[historySelected].isDelete" class="mt-3 pa-3" variant="outlined">
+            <h4 class="mono mb-1">Rev {{ historyEntries[historySelected].revision }}:</h4>
+            <pre class="mono" style="white-space:pre-wrap;word-wrap:break-word;max-height:300px;overflow-y:auto;">{{ historyEntries[historySelected].value }}</pre>
+          </v-card>
+        </v-card-text>
+        <v-card-actions>
+          <div class="flex-grow-1"></div>
+          <v-btn variant="elevated" color="button-bg" @click="historyDialogOpen = false">Close</v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 
@@ -114,7 +151,12 @@ export default {
       editKey: "",
       editValue: "",
       activeItemId: null,
-      activeItemValue: null
+      activeItemValue: null,
+      historyDialogOpen: false,
+      historyLoading: false,
+      historyKey: "",
+      historyEntries: [],
+      historySelected: null
     };
   },
   computed: {
@@ -253,6 +295,23 @@ export default {
       socket.onerror = function(error) {
         console.log(`[ws] ${error.message}`); // eslint-disable-line no-console
       };
+    },
+    btnHistory() {
+      this.historyKey = this.activeItemId;
+      this.historyEntries = [];
+      this.historySelected = null;
+      this.historyLoading = true;
+      this.historyDialogOpen = true;
+      fetch(process.env.VUE_APP_ROOT_API + "/api/history?k=" + encodeURIComponent(this.activeItemId))
+        .then(function(res) { return res.json(); })
+        .then(function(entries) {
+          this.historyEntries = entries || [];
+          this.historyLoading = false;
+        }.bind(this))
+        .catch(function(err) {
+          console.warn(err); // eslint-disable-line no-console
+          this.historyLoading = false;
+        }.bind(this));
     },
     btnAdd() {
       this.editKey = "";

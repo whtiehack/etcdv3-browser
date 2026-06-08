@@ -58,6 +58,7 @@ func main() {
 	mux.HandleFunc("/test", handleTestPage)
 	mux.HandleFunc("/api/list", server.handleList)
 	mux.HandleFunc("/api/kv", server.handleOne)
+	mux.HandleFunc("/api/history", server.handleHistory)
 	mux.HandleFunc("/api/kvws", server.handleWebsocket)
 
 	mux.Handle("/", http.FileServer(http.Dir("dist"))) // serves the frontend in a production image
@@ -69,7 +70,7 @@ func main() {
 		// Debug:          true,
 	})
 
-	log.Fatal(http.ListenAndServe(fmt.Sprintf(":%d", httpPort), cors.Handler(mux)))
+	log.Fatal(http.ListenAndServe(fmt.Sprintf("127.0.0.1:%d", httpPort), cors.Handler(mux)))
 }
 
 var templates = template.Must(template.ParseGlob("templates/*.gohtml"))

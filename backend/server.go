@@ -182,6 +182,68 @@ func (s *apiServer) deleteOne(w http.ResponseWriter, r *http.Request, key string
 	_ = json.NewEncoder(w).Encode(&okResponse{Rev: res.Header.Revision})
 }
 
+type historyEntry struct {
+	Revision int64  `json:"revision"`
+	Value    string `json:"value"`
+	IsDelete bool   `json:"isDelete,omitempty"`
+}
+
+func (s *apiServer) handleHistory(w http.ResponseWriter, r *http.Request) {
+	key := r.FormValue("k")
+	if key == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	resp, err := s.etcd.Get(r.Context(), key)
+	if err != nil {
+		log.Printf("History Get: %v", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	if resp.Count == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode([]historyEntry{})
+		return
+	}
+
+	createRev := resp.Kvs[0].CreateRevision
+	entries := []historyEntry{}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+	defer cancel()
+
+	watchChan := s.etcd.Watch(ctx, key, clientv3.WithRev(createRev))
+	for watchResp := range watchChan {
+		if watchResp.Err() != nil {
+			break
+		}
+		for _, ev := range watchResp.Events {
+			entry := historyEntry{Revision: ev.Kv.ModRevision}
+			if ev.Type == mvccpb.DELETE {
+				entry.IsDelete = true
+			} else {
+				entry.Value = string(ev.Kv.Value)
+			}
+			entries = append(entries, entry)
+		}
+		if watchResp.Header.Revision <= resp.Header.Revision {
+			if len(watchResp.Events) == 0 {
+				continue
+			}
+			lastRev := watchResp.Events[len(watchResp.Events)-1].Kv.ModRevision
+			if lastRev >= resp.Header.Revision {
+				break
+			}
+		} else {
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(entries)
+}
+
 func (s *apiServer) initAndWatch() {
 	s.loadExisting()
 	rev := s.rev
